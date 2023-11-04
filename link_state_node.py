@@ -70,8 +70,9 @@ class Link_State_Node(Node):
             self.all_nodes.add(neighbor)
 
             # update other_neighbors dict with the current node
-            if self.other_neighbors[neighbor]:
-                self.other_neighbors[neighbor].append(self.id)
+            if neighbor in self.other_neighbors:
+                if self.other_neighbors[neighbor]:
+                    self.other_neighbors[neighbor].append(self.id)
             else:
                 self.other_neighbors[neighbor] = [self.id]
 
@@ -140,8 +141,14 @@ class Link_State_Node(Node):
         # loop until we have visited all nodes
         # find an unvisited node whose distance from source is minimum
 
+        # all nodes is good
+        # print(self.all_nodes)
+
+
+        print(self.shortest_dist)
+
         while self.visited != self.all_nodes:
-            
+            # print("DIJKSTRA LOOP")
             # loop through shortest dist looking for minimum dist from source (unvisited)
             for w, val in self.shortest_dist.items():
                 
@@ -153,12 +160,21 @@ class Link_State_Node(Node):
                     # each neighbor v of w and not in visited
                     for v in self.other_neighbors[w]:
                         if v not in self.visited:
-                            self.shortest_dist[v] = min(self.shortest_dist[v], self.shortest_dist[w] + self.costs(frozenset([w, v])))
 
+                            if self.shortest_dist[w] + self.costs(frozenset([w, v])) < self.shortest_dist[v]:
+                                self.shortest_dist[v] = self.shortest_dist[w] + self.costs(frozenset([w, v]))
+                                self.prev_node[v] = w
 
-        # add that node to visited
-        # update the distance from the source of each neighbor of that unvisited node
-        # that is not in visited
+        
+        prev = -1
+        curr = destination
+        while curr != self.id:
+            print("PREV WHILE LOOP")
+            if curr in self.prev_node:
+                prev = curr
+                curr = self.prev_node[curr]
+            else:
+                prev = -1
+                break
 
-
-        return -1
+        return prev
