@@ -17,11 +17,13 @@ class Link_State_Node(Node):
         # maps node to previous node (where did we come from on the path)
         self.prev_node = {}
         # visited nodes
-        self.visited = [self.id]
-        # unvisited nodes
-        self.unvisited = []
+        self.visited = set([self.id])
+        # all nodes
+        self.all_nodes = set([self.id])
 
         self.neighbors = []
+
+        self.other_neighbors = {}
 
     # Return a string
     def __str__(self):
@@ -33,24 +35,47 @@ class Link_State_Node(Node):
         # latency = -1 if delete a link
         if latency == -1 and neighbor in self.neighbors:
             self.neighbors.remove(neighbor)
-        
+
+            #updating dict values
+
+            key = frozenset((self.id, neighbor))
+            self.costs.pop(key)
+            
+            self.shortest_dist[neighbor] = float('inf')
+
+            self.prev_node[neighbor] = None
+
+            # send message notifying other neighbors about deleted link, so they can update dictionary
+            del_msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'cost': -1, 'sender': self.id}
+
+            json_message = json.dumps(del_msg)
+            self.send_to_neighbors(json_message)
+
+            # remove the current node from its neighbor's other_neighbors dict, because link has been deleted
+            if neighbor in self.other_neighbors:
+                self.other_neighbors[neighbor].remove(self.id)
         
         else:
 
             #initialize Link state algorithim by recording neighbor costs
-            key = frozenset((self.id, neighbor.id))
+            key = frozenset((self.id, neighbor))
             self.costs[key] = latency
             
-            self.shortest_dist[neighbor.id] = latency
+            self.shortest_dist[neighbor] = latency
             
-            self.neighbors.append(neighbor.id)
+            self.neighbors.append(neighbor)
 
-            self.prev_node[neighbor.id] = self.id
+            self.prev_node[neighbor] = self.id
 
-            self.unvisited.append(neighbor.id)
+            self.all_nodes.add(neighbor)
 
+            # update other_neighbors dict with the current node
+            if self.other_neighbors[neighbor]:
+                self.other_neighbors[neighbor].append(self.id)
+            else:
+                self.other_neighbors[neighbor] = [self.id]
 
-            message = {'src': self.id, 'dst':neighbor.id, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id}
+            message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id}
             json_message = json.dumps(message)
             self.send_to_neighbors(json_message)
 
@@ -71,12 +96,16 @@ class Link_State_Node(Node):
         if src not in self.neighbors and src not in self.shortest_dist:
             self.shortest_dist[src] = float('inf')
             self.prev_node[src] = None
-            self.unvisited.append(src)
+            
+        if src not in self.all_nodes:
+            self.all_nodes.add(src)
 
         if dst not in self.neighbors and dst not in self.shortest_dist:
             self.shortest_dist[dst] = float('inf')
             self.prev_node[dst] = None
-            self.unvisited.append(dst)
+
+        if dst not in self.all_nodes:
+            self.all_nodes.add(dst)
 
         if key in self.all_msgs:
             if seq_num not in self.all_msgs[key]:
@@ -93,8 +122,6 @@ class Link_State_Node(Node):
                 else:
                     rec_msg['sender'] = self.id
                     self.send_to_neighbor(sender, json.dumps(rec_msg))
-                    
-
         else:
             # msg not previously seen, so process it
             self.all_msgs[key] = [seq_num]
@@ -108,16 +135,27 @@ class Link_State_Node(Node):
 
             self.send_to_neighbors(json.dumps(rec_msg))
             
-        
-        
-
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
         # loop until we have visited all nodes
         # find an unvisited node whose distance from source is minimum
 
-        for node in self.unvisited:
-            pass
+        while self.visited != self.all_nodes:
+            
+            # loop through shortest dist looking for minimum dist from source (unvisited)
+            for w, val in self.shortest_dist.items():
+                
+                
+                if val < float('inf') and w not in self.visited:
+                    # add that node to visited
+                    self.visited.add(w)
+
+                    # each neighbor v of w and not in visited
+                    for v in self.other_neighbors[w]:
+                        if v not in self.visited:
+                            self.shortest_dist[v] = min(self.shortest_dist[v], self.shortest_dist[w] + self.costs(frozenset([w, v])))
+
+
         # add that node to visited
         # update the distance from the source of each neighbor of that unvisited node
         # that is not in visited
