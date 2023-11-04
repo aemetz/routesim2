@@ -11,6 +11,12 @@ class Generic_Node(Node):
 
     def link_has_been_updated(self, neighbor, latency):
         # latency = -1 if delete a link
+        print(f"Node ID: {self.id}")
+        print(f"Neighbor: {neighbor}")
+        print(f"Latency: {latency}")
+        print(f"Neighbors: {self.neighbors}")
+        print("----------------------------------")
+
         if latency == -1 and neighbor in self.neighbors:
 
             self.neighbors.remove(neighbor)
@@ -18,6 +24,7 @@ class Generic_Node(Node):
             self.neighbors.append(neighbor)
             # self.send_to_neighbors("hello")
             self.send_to_neighbor(neighbor, "hello")
+            
 
         self.logging.debug('link update, neighbor %d, latency %d, time %d' % (neighbor, latency, self.get_time()))
 
