@@ -83,7 +83,7 @@ class Link_State_Node(Node):
 
             
 
-            message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id, 'last_msg': len(self.last_msg)}
+            message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id, 'len_all_nodes': len(self.all_nodes), 'time': self.get_time()}
             json_message = json.dumps(message)
             self.send_to_neighbors(json_message)
 
@@ -95,6 +95,7 @@ class Link_State_Node(Node):
         rec_msg = json.loads(m)
 
         # For regular messages
+        # change condition to something unique to message, not del_msg or up-to-date msg
         if 'src' in rec_msg:
             src = rec_msg['src']
             dst = rec_msg['dst']
@@ -157,28 +158,77 @@ class Link_State_Node(Node):
                 self.costs[key] = cost
 
                 # send information to new nodes to catch them up to date
-                # what should our condition be? CONSIDER USING GET_TIME
-                # if rec_msg['last_msg'] < len(self.last_msg):
-                #     message = {'costs': self.costs, 'all_nodes': self.all_nodes, 'other_neighbors': self.other_neighbors}
-                #     json_message = json.dumps(message)
-                #     self.send_to_neighbor(json_message)
+                print("CHECK BEFORE IF STATEMENT LINE 162 --------------------- ")
+                print(self.id)
+                print(f"TIME: {rec_msg['time']}")
+                print(f"TIME: {self.get_time()}")
+                if rec_msg['len_all_nodes'] < len(self.all_nodes) and rec_msg['time'] > 0:
+                    print(f"IF STATEMENT TRUE FOR NODE: {self.id}")
+                    # convert sets to lists bc sets not json serializable
+                    temp_all_nodes = list(self.all_nodes)
+                    temp_other_neighbors = {}
+                    print(f"ORIGINAL OTHER NEIGHBORS: {self.other_neighbors}")
+                    for key in self.other_neighbors:
+                        temp_other_neighbors[key] = list(self.other_neighbors[key])
+
+                    print(f"TEMP OTHER NEIGHBORS: {temp_other_neighbors}")
+
+                    temp_costs = {}
+                    for key in self.costs:
+                        temp_key = tuple(key)
+                        key_str1 = str(temp_key[0])
+                        comma = ","
+                        key_str2 = str(temp_key[1])
+                        temp_costs[key_str1 + comma + key_str2] = self.costs[key]
+
+                    message = {'costs': temp_costs, 'all_nodes': temp_all_nodes, 'other_neighbors': temp_other_neighbors}
+                    json_message = json.dumps(message)
+                    self.send_to_neighbor(sender, json_message)
 
                 rec_msg['sender'] = self.id
 
                 self.send_to_neighbors(json.dumps(rec_msg))
 
         # For catching-up-to-date messages
-        # else:
-        #     self.costs = rec_msg['costs']
-        #     self.all_nodes = rec_msg['all_nodes']
-        #     self.other_neighbors = rec_msg['other_neighbors']
+        else:
+            print("RECEIVED UP TO DATE MESSAGE----------------------------------------")
+            print(self.id)
 
-        #     # Update shortest_dist and prev_node
+            
+            self.all_nodes = set(rec_msg['all_nodes'])
 
-        #     for node in self.all_nodes:
-        #         if node != self.id and node not in self.prev_node and node not in self.shortest_dist:
-        #             self.prev_node[node] = None
-        #             self.shortest_dist[node] = float('inf')
+
+            print("COMPARING OTHER_NEIGHBORS TO REC_MSG OTHER NEIGHBORS")
+            print(f"other_neighbors: {self.other_neighbors}")
+            print(f"rec_msg: {rec_msg['other_neighbors']}")
+            
+
+            for key in rec_msg['other_neighbors']:
+                key = int(key)
+                if key in self.other_neighbors:
+                    self.other_neighbors[key] = self.other_neighbors[key].union(set(rec_msg['other_neighbors'][str(key)]))
+                else:
+                    self.other_neighbors[key] = set(rec_msg['other_neighbors'][str(key)])
+                
+                
+            self.costs = {}
+
+            for key in rec_msg['costs']:
+                tuple_val = key.split(",")
+                key1 = int(tuple_val[0])
+                key2 = int(tuple_val[1])
+                self.costs[frozenset((key1, key2))] = rec_msg['costs'][key]
+
+            
+            # print('NEW NODE MESSAGE RECEIVED ---------------------')
+            print(f'COSTS OF THE GRAPH: {self.costs}')
+            
+            # Update shortest_dist and prev_node
+
+            for node in self.all_nodes:
+                if node != self.id and node not in self.prev_node and node not in self.shortest_dist:
+                    self.prev_node[node] = None
+                    self.shortest_dist[node] = float('inf')
          
             
     # Return a neighbor, -1 if no path to destination
@@ -193,20 +243,30 @@ class Link_State_Node(Node):
         print(self.id)
         print(self.shortest_dist)
 
-        print("LAST_MSG DICT ---------- ")
-        print(self.last_msg)
+        # print("LAST_MSG DICT ---------- ")
+        # print(self.last_msg)
+        print(f"VISITED: {self.visited}")
+        print(f"OTHER NEIGHBORS: {self.other_neighbors}")
+
+        self.visited = set([self.id])
+
+        for node in self.shortest_dist:
+            if node not in self.neighbors:
+                self.shortest_dist[node] = float('inf')
+            else:
+                self.shortest_dist[node] = self.costs[frozenset((node, self.id))]
 
         while self.visited != self.all_nodes:
             # print("DIJKSTRA LOOP")
             # loop through shortest dist looking for minimum dist from source (unvisited)
             for w, val in self.shortest_dist.items():
                 
-                
+                #MAIN ISSUE GUESS: fix it so that it iterates through all w's not in visited and its the minimum one, not just less then infinity
                 if val < float('inf') and w not in self.visited:
                     # add that node to visited
                     self.visited.add(w)
                     print("---------w = 1--------")
-                    print(w == 1)
+                    print(f"W: {w}")
 
                     print("w's other neighbors ---------------")
                     print(self.other_neighbors[w])
@@ -214,22 +274,31 @@ class Link_State_Node(Node):
                     print(self.costs)
                     # each neighbor v of w and not in visited
                     for v in self.other_neighbors[w]:
+
+                        # fixes temp issue when deleted
                         if v not in self.visited:
 
                             if self.shortest_dist[w] + self.costs[frozenset([w, v])] < self.shortest_dist[v]:
                                 self.shortest_dist[v] = self.shortest_dist[w] + self.costs[frozenset([w, v])]
                                 self.prev_node[v] = w
 
-        
+
         prev = -1
         curr = destination
+        print(f'START NODE: {self.id}')
+        print(f'DESTINATION: {destination}')
         while curr != self.id:
             print("PREV WHILE LOOP")
             if curr in self.prev_node:
                 prev = curr
                 curr = self.prev_node[curr]
+                # path.append(prev)
             else:
+                print('ELSE OF PREV THING afireujf')
                 prev = -1
                 break
-
+        print(f'PREV NODE DICT: {self.prev_node}')
+        # print(f'auirgbn;efklj;na {path}')
+        print(f'PREV: {prev}')
         return prev
+        
