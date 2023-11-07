@@ -259,28 +259,42 @@ class Link_State_Node(Node):
         while self.visited != self.all_nodes:
             # print("DIJKSTRA LOOP")
             # loop through shortest dist looking for minimum dist from source (unvisited)
-            for w, val in self.shortest_dist.items():
+            w = None
+            val = float('inf')
+            for node, dist in self.shortest_dist.items():
+                print("SHORTEST DIST LOOP")
+                if dist < val and node not in self.visited:
+                    w = node
+                    val = dist
+                    
+            # print(f"MINIMUM W: {w}")
+            print("OUTERMOST LOOP")
                 
-                #MAIN ISSUE GUESS: fix it so that it iterates through all w's not in visited and its the minimum one, not just less then infinity
-                if val < float('inf') and w not in self.visited:
-                    # add that node to visited
-                    self.visited.add(w)
-                    print("---------w = 1--------")
-                    print(f"W: {w}")
+            #MAIN ISSUE GUESS: fix it so that it iterates through all w's not in visited and its the minimum one, not just less then infinity
+            # if w not in self.visited:
+                # add that node to visited
+            self.visited.add(w)
+            print("---------w = 1--------")
+            print(f"W: {w}")
 
-                    print("w's other neighbors ---------------")
-                    print(self.other_neighbors[w])
-                    print("costs of all connections -----------")
-                    print(self.costs)
-                    # each neighbor v of w and not in visited
-                    for v in self.other_neighbors[w]:
+            print("w's other neighbors ---------------")
+            print(self.other_neighbors[w])
+            print("costs of all connections -----------")
+            print(self.costs)
+            # each neighbor v of w and not in visited
+            for v in self.other_neighbors[w]:
 
-                        # fixes temp issue when deleted
-                        if v not in self.visited:
+                print("LOOP")
 
-                            if self.shortest_dist[w] + self.costs[frozenset([w, v])] < self.shortest_dist[v]:
-                                self.shortest_dist[v] = self.shortest_dist[w] + self.costs[frozenset([w, v])]
-                                self.prev_node[v] = w
+                # fixes temp issue when deleted
+                if v not in self.visited:
+
+                    print("FIRST IF")
+
+                    if self.shortest_dist[w] + self.costs[frozenset([w, v])] < self.shortest_dist[v]:
+                        print("Second IF")
+                        self.shortest_dist[v] = self.shortest_dist[w] + self.costs[frozenset([w, v])]
+                        self.prev_node[v] = w
 
 
         prev = -1
