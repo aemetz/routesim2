@@ -37,40 +37,28 @@ class Link_State_Node(Node):
             self.neighbors.remove(neighbor)
 
             #updating dict values
-
             key = frozenset((self.id, neighbor))
             self.costs.pop(key)
-            
             self.shortest_dist[neighbor] = float('inf')
 
-            self.prev_node[neighbor] = None
+            if key not in self.all_msgs:
+                self.all_msgs[key] = [self.seq_num]
+            else:
+                self.all_msgs[key].append(self.seq_num)
 
+            self.prev_node[neighbor] = None
             # send message notifying other neighbors about deleted link, so they can update dictionary
             del_msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'cost': -1, 'sender': self.id, 'del': True}
-
             json_message = json.dumps(del_msg)
             self.send_to_neighbors(json_message)
-
             # remove the current node from its neighbor's other_neighbors dict, because link has been deleted
             if neighbor in self.other_neighbors:
                 self.other_neighbors[neighbor].remove(self.id)
-        
         else:
-
             #initialize Link state algorithim by recording neighbor costs
-            
             key = frozenset((self.id, neighbor))
-            if self.id == 4 and neighbor== 0:
-                print("COSTSSSSSSSSS CHANGEEEEEEEEEEEEEEEEEEEEEEE")
-                print(latency)
-                print(self.costs)
+          
             self.costs[key] = latency
-
-            if self.id == 4 and neighbor== 0:
-                print("AFTERRRRRRRRRRR -------------- COSTS CHANGE")
-                print(latency)
-                print(self.costs)
-            
             self.shortest_dist[neighbor] = latency
             
             self.neighbors.append(neighbor)
@@ -78,8 +66,10 @@ class Link_State_Node(Node):
             self.prev_node[neighbor] = self.id
 
             self.all_nodes.add(neighbor)
-
-            # if self.costs.keys() > 0
+            if key not in self.all_msgs:
+                self.all_msgs[key] = [self.seq_num]
+            else:
+                self.all_msgs[key].append(self.seq_num)
 
             # update other_neighbors dict with the current node
             if neighbor in self.other_neighbors:
@@ -88,30 +78,28 @@ class Link_State_Node(Node):
             else:
                 self.other_neighbors[neighbor] = set([self.id])
 
-            
+            temp_last_msg = {}
 
-            message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id, 'len_all_nodes': len(self.all_nodes), 'time': self.get_time()}
+            alt_message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency}
+            self.last_msg[key] = alt_message
+            
+            for key in self.last_msg:
+                temp_key = tuple(key)
+                key_str1 = str(temp_key[0])
+                comma = ","
+                key_str2 = str(temp_key[1])
+                temp_last_msg[key_str1 + comma + key_str2] = self.last_msg[key]
+            
+            message = {'src': self.id, 'dst':neighbor, 'seq_num': self.seq_num, 'cost': latency, 'sender': self.id, 'last_msg': temp_last_msg, 'time': self.get_time()}
+
             json_message = json.dumps(message)
             self.send_to_neighbors(json_message)
 
         self.seq_num += 1   
         
-
     # Fill in this function
     def process_incoming_routing_message(self, m):
         rec_msg = json.loads(m)
-
-        if 'src' in rec_msg:
-            if self.id == 4:
-                src = rec_msg['src']
-                dst = rec_msg['dst']
-                if src == 6 or src == 7:
-                    print("INCOMING MESSAGES FROM ID:4 ---------------------------------------")
-                    print(src)
-                    print(dst)
-                    
-
-
 
         # For node deleted messages
         if 'del' in rec_msg:
@@ -121,7 +109,6 @@ class Link_State_Node(Node):
             cost = rec_msg['cost']
             sender = rec_msg['sender']
             key = frozenset((src, dst))
-
 
             if key in self.all_msgs:
                 if seq_num not in self.all_msgs[key]:
@@ -139,19 +126,19 @@ class Link_State_Node(Node):
                         if src in self.other_neighbors[dst]:
                             self.other_neighbors[dst].remove(src)
 
-                    if seq_num > self.last_msg[key]:
-                        self.last_msg[key] = seq_num
+                    if seq_num > self.last_msg[key]['seq_num']:
+                        message = {'src': src, 'dst':dst, 'seq_num': seq_num, 'cost': cost}
+                        self.last_msg[key] = message
                         rec_msg['sender'] = self.id
                         self.send_to_neighbors(json.dumps(rec_msg))
-                    elif seq_num < self.last_msg[key]:
+                    elif seq_num < self.last_msg[key]['seq_num']:
                         rec_msg['sender'] = self.id
                         self.send_to_neighbor(sender, json.dumps(rec_msg))
             else:
                 self.all_msgs[key] = [seq_num]
-
-                self.last_msg[key]  = seq_num
+                message = {'src': src, 'dst':dst, 'seq_num': seq_num, 'cost': cost}
+                self.last_msg[key]  = message
                     
-                
                 del self.costs[key]
                 self.other_neighbors[src].remove(dst)
                 self.other_neighbors[dst].remove(src)
@@ -159,9 +146,6 @@ class Link_State_Node(Node):
                 rec_msg['sender'] = self.id
                 self.send_to_neighbors(json.dumps(rec_msg))
                 
-           
-
-
         # For regular messages
         # change condition to something unique to message, not del_msg or up-to-date msg
         elif 'src' in rec_msg:
@@ -170,23 +154,30 @@ class Link_State_Node(Node):
             seq_num = rec_msg['seq_num']
             cost = rec_msg['cost']
             sender = rec_msg['sender']
+            last_msg = {}
+
             key = frozenset((src, dst))
+           
+            for key_for in rec_msg['last_msg']:
+                tuple_val = key_for.split(",")
+                key1 = int(tuple_val[0])
+              
+                key2 = int(tuple_val[1])
+             
+                last_msg[frozenset((key1, key2))] = rec_msg['last_msg'][key_for]
 
             # add non-neighbors to 
             if src not in self.neighbors and src not in self.shortest_dist:
                 self.shortest_dist[src] = float('inf')
                 self.prev_node[src] = None
                 
-
             self.all_nodes.add(src)
 
             if dst not in self.neighbors and dst not in self.shortest_dist:
                 self.shortest_dist[dst] = float('inf')
                 self.prev_node[dst] = None
 
-          
             self.all_nodes.add(dst)
-
 
             #Updating Other Nodes' Neighbors
 
@@ -195,7 +186,6 @@ class Link_State_Node(Node):
             else:
                 self.other_neighbors[src] = set([dst])
 
-
             if dst in self.other_neighbors:
                 self.other_neighbors[dst].add(src)
             else:
@@ -203,53 +193,85 @@ class Link_State_Node(Node):
 
             if key in self.all_msgs:
                 if seq_num not in self.all_msgs[key]:
+
                     # msg not previously seen, so process it
                     self.all_msgs[key].append(seq_num)
                     
                     # record cost between nodes
                     self.costs[key] = cost
-                    if key == frozenset((7,6)) and self.id == 4: 
-                        print("RECORDED _ __ _ _ _ _ _ _____ _ _ __ _ __ ")
-                        print(self.costs)
 
-                    if seq_num > self.last_msg[key]:
-                        self.last_msg[key] = seq_num
+                    if seq_num > self.last_msg[key]['seq_num']:
+                        message = {'src': src, 'dst':dst, 'seq_num': seq_num, 'cost': cost}
+                        self.last_msg[key] = message
                         rec_msg['sender'] = self.id
                         self.send_to_neighbors(json.dumps(rec_msg))
-                    elif seq_num < self.last_msg[key]:
+                    elif seq_num < self.last_msg[key]['seq_num']:
                         rec_msg['sender'] = self.id
                         self.send_to_neighbor(sender, json.dumps(rec_msg))
+                        
+                else:
+
+                    check_last_msg = False
+                
+                    if (len(self.last_msg) > len(last_msg)) and rec_msg['time'] > 0:
+
+                        check_last_msg = True
+
+                    if check_last_msg and rec_msg['time'] > 0:
+                        # convert sets to lists bc sets not json serializable
+                        temp_all_nodes = list(self.all_nodes)
+                        temp_other_neighbors = {}
+                        for key in self.other_neighbors:
+                            temp_other_neighbors[key] = list(self.other_neighbors[key])
+
+
+                        temp_last_msg = {}
+                        for key in self.last_msg:
+                            temp_key = tuple(key)
+                            key_str1 = str(temp_key[0])
+                            comma = ","
+                            key_str2 = str(temp_key[1])
+                            temp_last_msg[key_str1 + comma + key_str2] = self.last_msg[key]
+
+                        message = {'last_msg': temp_last_msg, 'all_nodes': temp_all_nodes, 'other_neighbors': temp_other_neighbors}
+                        json_message = json.dumps(message)
+                        self.send_to_neighbor(sender, json_message)
+
             else:
                 # msg not previously seen, so process it
                 self.all_msgs[key] = [seq_num]
-
-                self.last_msg[key]  = seq_num
+                message = {'src': src, 'dst':dst, 'seq_num': seq_num, 'cost': cost}
+                
+                self.last_msg[key]  = message
 
                 # record cost between nodes
                 
                 self.costs[key] = cost
-                if key == frozenset((7,6)) and self.id == 4:
-                    print("RECORDED-------------------------")
-                    print(self.costs)
 
                 # send information to new nodes to catch them up to date
-                if rec_msg['len_all_nodes'] < len(self.all_nodes) and rec_msg['time'] > 0:
+
+                check_last_msg = False
+                
+                if (len(self.last_msg) > len(last_msg)) and rec_msg['time'] > 0:
+
+                    check_last_msg = True
+        
+                if check_last_msg and rec_msg['time'] > 0:
                     # convert sets to lists bc sets not json serializable
                     temp_all_nodes = list(self.all_nodes)
                     temp_other_neighbors = {}
                     for key in self.other_neighbors:
                         temp_other_neighbors[key] = list(self.other_neighbors[key])
 
-
-                    temp_costs = {}
-                    for key in self.costs:
+                    temp_last_msg = {}
+                    for key in self.last_msg:
                         temp_key = tuple(key)
                         key_str1 = str(temp_key[0])
                         comma = ","
                         key_str2 = str(temp_key[1])
-                        temp_costs[key_str1 + comma + key_str2] = self.costs[key]
+                        temp_last_msg[key_str1 + comma + key_str2] = self.last_msg[key]
 
-                    message = {'costs': temp_costs, 'all_nodes': temp_all_nodes, 'other_neighbors': temp_other_neighbors}
+                    message = {'last_msg': temp_last_msg, 'all_nodes': temp_all_nodes, 'other_neighbors': temp_other_neighbors}
                     json_message = json.dumps(message)
                     self.send_to_neighbor(sender, json_message)
 
@@ -259,8 +281,7 @@ class Link_State_Node(Node):
 
         # For catching-up-to-date messages
         else:
-            if self.id == 4:
-                print("RECEIVED UP TO DATE MESSAGE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+          
             #CHANGED
             # self.all_nodes = set(rec_msg['all_nodes'])
 
@@ -276,26 +297,49 @@ class Link_State_Node(Node):
                     self.other_neighbors[key] = set(rec_msg['other_neighbors'][str(key)])
                 
                 
-            # self.costs = {}
+            temp_last_msg = {}
 
-            for key in rec_msg['costs']:
+            for key in rec_msg['last_msg']:
                 tuple_val = key.split(",")
                 key1 = int(tuple_val[0])
                 key2 = int(tuple_val[1])
-                if self.id == 4 and (key1 == self.id or key2 == self.id) and self.costs[frozenset((key1, key2))] ==2:
-                    print("--------------")
-                    print(self.costs[frozenset((key1, key2))] )
-                    print(rec_msg['costs'][key])
-                    print(key1)
-                    print(key2)
-                if key1 == self.id or key2 == self.id:
-                    continue
-                self.costs[frozenset((key1, key2))] = rec_msg['costs'][key]
+             
+                temp_last_msg[frozenset((key1, key2))] = rec_msg['last_msg'][key]
 
+   
+            # remove the current node from its neighbor's other_neighbors dict, because link has been deleted
 
-            
+            for key in temp_last_msg:
+
+                if key in self.all_msgs:
+                    self.all_msgs[key].append(temp_last_msg[key]['seq_num'])
+                else:
+                    self.all_msgs[key] = [temp_last_msg[key]['seq_num']]
+
+                if key in self.last_msg:
+                    if self.last_msg[key]['seq_num'] < temp_last_msg[key]['seq_num']:
+                        self.last_msg[key] =  temp_last_msg[key]
+                        if self.last_msg[key]['cost'] != -1:
+                            
+                            self.costs[key] = self.last_msg[key]['cost']
+                        else:
+
+                            src = self.last_msg[key]['src']
+                            dst = self.last_msg[key]['dst']
+
+                            
+                            self.costs.pop(key)
+                            
+                            if src in self.other_neighbors:
+                                self.other_neighbors[src].remove(dst)
+                            if dst in self.other_neighbors:
+                                self.other_neighbors[dst].remove(src)
+                else:
+                    self.last_msg[key] = temp_last_msg[key]
+                    if self.last_msg[key]['cost'] != -1:
+                        self.costs[key] = self.last_msg[key]['cost']
+                        
             # Update shortest_dist and prev_node
-
             for node in self.all_nodes:
                 if node != self.id and node not in self.prev_node and node not in self.shortest_dist:
                     self.prev_node[node] = None
@@ -307,14 +351,9 @@ class Link_State_Node(Node):
         # loop until we have visited all nodes
         # find an unvisited node whose distance from source is minimum
 
-        # all nodes is good
-        # print(self.all_nodes)
-        if self.id == 4:
-            print("-------------------------")
-            print(self.id)
-            print(self.costs)
-            print(self.shortest_dist)
- 
+        for key in self.last_msg:
+            self.costs[key] = self.last_msg[key]['cost']
+            
         self.visited = set([self.id])
 
         for node in self.shortest_dist:
@@ -324,70 +363,36 @@ class Link_State_Node(Node):
                 self.shortest_dist[node] = self.costs[frozenset((node, self.id))]
 
         while self.visited != self.all_nodes:
-            # print("DIJKSTRA LOOP")
-            # loop through shortest dist looking for minimum dist from source (unvisited)
             w = None
             val = float('inf')
-            # print("^^^^^^^^^^^^^^^^^^^^^^^^^^")
-            # print(self.id)
-            # print("ALL NODES: {self.all_nodes}")
-            # print(self.visited)
-            # print(self.shortest_dist)
+
             for node, dist in self.shortest_dist.items():
-                # print("SHORTEST DIST LOOP")
                 if dist < val and node not in self.visited:
                     w = node
                     val = dist
                     
-            # print(f"MINIMUM W: {w}")
-            # print("OUTERMOST LOOP")
-                
-            #MAIN ISSUE GUESS: fix it so that it iterates through all w's not in visited and its the minimum one, not just less then infinity
-            # if w not in self.visited:
-                # add that node to visited
             self.visited.add(w)
-            # print("---------w = 1--------")
-            # print(f"W: {w}")
 
-            # print("w's other neighbors ---------------")
-            # print(self.other_neighbors[w])
-            # print("costs of all connections -----------")
-            # print(f"id: {self.id}")
-            # print(self.costs)
-            # each neighbor v of w and not in visited
             for v in self.other_neighbors[w]:
-
-                # print("LOOP")
 
                 # fixes temp issue when deleted
                 if v not in self.visited:
 
-                    # print("FIRST IF")
-
                     if self.shortest_dist[w] + self.costs[frozenset([w, v])] < self.shortest_dist[v]:
-                        # print("Second IF")
                         self.shortest_dist[v] = self.shortest_dist[w] + self.costs[frozenset([w, v])]
                         self.prev_node[v] = w
 
 
         prev = -1
         curr = destination
-        if self.id == 4:
-            print(f'START NODE: {self.id}')
-            print(f'DESTINATION: {destination}')
+    
         while curr != self.id:
-            # print("PREV WHILE LOOP")
             if curr in self.prev_node:
                 prev = curr
                 curr = self.prev_node[curr]
-                # path.append(prev)
             else:
-                # print('ELSE OF PREV THING afireujf')
                 prev = -1
                 break
-        if self.id == 4:
-            print(f'PREV NODE DICT: {self.prev_node}')
-            # print(f'auirgbn;efklj;na {path}')
-            print(f'PREV: {prev}')
+     
         return prev
         
