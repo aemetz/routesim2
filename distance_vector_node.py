@@ -2,12 +2,13 @@ from simulator.node import Node
 import json
 import copy
 
+
 class Distance_Vector_Node(Node):
     def __init__(self, id):
         super().__init__(id)
 
         # Distance vector for outbound links. Maps destination node to (cost, next_hop, path)
-        self.dv = {}
+        self.dv = {self.id : [0, self.id, [self.id]]}
 
         # Store the DV's of all the node's neighbors. Maps neighbor node id to their DV dictionary
         self.neighbor_dvs = {}
@@ -19,6 +20,9 @@ class Distance_Vector_Node(Node):
 
         # Store the neighbors of the current node
         self.neighbors = set([])
+
+
+        self.costs = {}
 
     # Return a string
     def __str__(self):
@@ -40,6 +44,8 @@ class Distance_Vector_Node(Node):
 
         else:
             self.neighbors.add(neighbor)
+
+            self.costs[neighbor] = latency
 
             
             
@@ -75,6 +81,8 @@ class Distance_Vector_Node(Node):
             rec_dv[int(key1)] = rec_msg['dv'][key1]
 
         # self.neighbor_dvs[neighbor] = rec_dv
+
+        dv_copy = copy.deepcopy(self.dv)
         
         # Check if we have received a msg before, if so compare seq_num to get most recent 
         if key in self.latest_msg:
@@ -105,7 +113,7 @@ class Distance_Vector_Node(Node):
                     min_cost = float('inf')
                     min_neighbor = None
 
-                    if node in self.neighbors or node == self.id:
+                    if node == self.id:
                         continue
 
                     for neighbor in self.latest_msg:
@@ -127,9 +135,9 @@ class Distance_Vector_Node(Node):
                         if str(node) in d_v:
                             d_v_value = d_v[str(node)][0]
                        
-                        if self.dv[neighbor][0] + d_v_value < min_cost:
+                        if self.costs[neighbor] + d_v_value < min_cost:
                             min_neighbor = neighbor
-                            min_cost = self.dv[neighbor][0] + d_v_value
+                            min_cost = self.costs[neighbor] + d_v_value
 
                     self.dv[node][0] = min_cost
                     self.dv[node][1] = min_neighbor
@@ -137,11 +145,15 @@ class Distance_Vector_Node(Node):
                 
 
                 # Finished updating our DV, now send it to neighbors
-                msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
-                json_message = json.dumps(msg)
-                self.send_to_neighbors(json_message)
+                # print(dv_copy)
 
-                self.seq_num += 1
+                if dv_copy != self.dv:
+
+                    msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
+                    json_message = json.dumps(msg)
+                    self.send_to_neighbors(json_message)
+
+                    self.seq_num += 1
 
                 # for each node y
                 # update dv(y) = min of cost between x and it's neighbor (src) plus the neighbor's DV to y
@@ -173,7 +185,7 @@ class Distance_Vector_Node(Node):
                 min_cost = float('inf')
                 min_neighbor = None
 
-                if node in self.neighbors or node == self.id:
+                if  node == self.id:
                     continue
 
                 # print('1411111111111111111111111111111111111111111111')
@@ -199,26 +211,28 @@ class Distance_Vector_Node(Node):
                     if str(node) in d_v:
                         d_v_value = d_v[str(node)][0]
 
-                    if self.dv[neighbor][0] + d_v_value < min_cost:
+                    if self.costs[neighbor] + d_v_value < min_cost:
                         min_neighbor = neighbor
-                        min_cost = self.dv[neighbor][0] + d_v_value
+                        min_cost = self.costs[neighbor] + d_v_value
 
                 self.dv[node][0] = min_cost
                 self.dv[node][1] = min_neighbor
 
             # Finished updating our DV, now send it to neighbors
-            msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
-            json_message = json.dumps(msg)
-            self.send_to_neighbors(json_message)
 
-            self.seq_num += 1
+            if dv_copy != self.dv:
+                msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
+                json_message = json.dumps(msg)
+                self.send_to_neighbors(json_message)
+
+                self.seq_num += 1
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
-        print("--------------------------------------------------")
-        print(f'NODE ID: {self.id}')
-        print(f"DV: {self.dv}")
-        print(f'NEXT HOP: {self.dv[destination][1]}')
+        # print("--------------------------------------------------")
+        # print(f'NODE ID: {self.id}')
+        # print(f"DV: {self.dv}")
+        # print(f'NEXT HOP: {self.dv[destination][1]}')
 
 
 
