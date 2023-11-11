@@ -20,8 +20,10 @@ class Distance_Vector_Node(Node):
         # Store the neighbors of the current node
         self.neighbors = set([])
 
-
         self.costs = {}
+
+        # map neighbor id to their link costs
+        self.neighbor_costs = {}
 
     # Return a string
     def __str__(self):
@@ -44,11 +46,25 @@ class Distance_Vector_Node(Node):
                 self.neighbor_dvs.pop(neighbor)
 
             if neighbor in self.latest_msg:
+                # if self.id == 3 and neighbor == 1:
+                    # print("ABOUT TO WORK!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    # print(self.latest_msg)
                 self.latest_msg.pop(neighbor)
-                
+                # if self.id == 3 and neighbor == 1:
+                #     print(self.latest_msg)
+                #     print("DID IT WOKR ?? ? ???????????????????????????")
+
+            if neighbor in self.costs:
+                # self.costs.pop(neighbor)
+                self.costs[neighbor] = float('inf')
+
+            # print("LINK DELETEDDDDDDDDDDDDDDDDDDDDDDDD")
+            # print(self.id)
+            # print(neighbor)
+               
 
 
-            msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'dv': self.dv}
+            msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'dv': self.dv, 'cost': self.costs}
             json_message = json.dumps(msg)
             self.send_to_neighbors(json_message)
                 
@@ -70,7 +86,7 @@ class Distance_Vector_Node(Node):
 
             # print(self.dv[neighbor])
 
-            msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'dv': self.dv}
+            msg = {'src': self.id, 'dst': neighbor, 'seq_num': self.seq_num, 'dv': self.dv, 'cost': self.costs}
             json_message = json.dumps(msg)
             self.send_to_neighbors(json_message)
 
@@ -83,10 +99,19 @@ class Distance_Vector_Node(Node):
 
         src = int(rec_msg['src'])
         dst = int(rec_msg['dst'])
+        # if 'cost' in rec_msg:
+        cost = rec_msg['cost']
         seq_num = int(rec_msg['seq_num'])
         rec_dv = {}
 
         key = src
+
+
+        # if src not in self.neighbor_costs:
+        #     self.neighbor_costs[src] = cost.copy()
+
+
+
 
         
 
@@ -203,16 +228,26 @@ class Distance_Vector_Node(Node):
                 # print(dv_copy)
 
                 if dv_copy != self.dv:
-                    print("----------------------------------")
-                    print(self.id)
-                    print(dv_copy)
-                    print(self.dv)
-                    print(self.costs)
-                    msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
+                    if len(self.dv) == len(dv_copy) and cost == self.neighbor_costs[src]:
+                        for node in self.dv:
+                            if self.dv[node] > dv_copy[node]:
+                                return
+
+
+                    if src not in self.neighbor_costs:
+                        self.neighbor_costs[src] = cost
+                    # print("----------------------------------")
+                    # print(self.id)
+                    # print(dv_copy)
+                    # print(self.dv)
+
+                    # print(self.costs)
+                    msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv, 'cost': self.costs}
                     json_message = json.dumps(msg)
                     self.send_to_neighbors(json_message)
 
                     self.seq_num += 1
+                
 
                 # for each node y
                 # update dv(y) = min of cost between x and it's neighbor (src) plus the neighbor's DV to y
@@ -224,7 +259,16 @@ class Distance_Vector_Node(Node):
         # If we haven't received a msg before, this is our latest msg
         else:
             # print(key)
+            # if self.id == 3 and src == 1:
+            #     print("RECEIVED MESSAGE FROM 1111111111111111111111111111")
+            #     print(rec_msg)
             self.latest_msg[key] = rec_msg
+
+
+            
+            # if src not in self.neighbor_costs:
+            self.neighbor_costs[src] = cost.copy()
+
 
 
              # gather any "new" nodes (new to us) from the msg
@@ -272,7 +316,14 @@ class Distance_Vector_Node(Node):
                     
                     if str(node) in d_v:
                         d_v_value = d_v[str(node)][0]
+                    
+                    # if neighbor == 1 and self.id == 1:
+                    #     print("99999999999999999999999999999999999999999999999")
+                    #     print(self.latest_msg)
+                    #     print(self.id)
+                    #     print(neighbor)
 
+                    
                     if self.costs[neighbor] + d_v_value < min_cost:
 
                         new_path = d_v[str(node)][2].copy()
@@ -308,7 +359,24 @@ class Distance_Vector_Node(Node):
             # Finished updating our DV, now send it to neighbors
 
             if dv_copy != self.dv:
-                msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv}
+                if len(self.dv) == len(dv_copy) and cost == self.neighbor_costs[src]:
+                    for node in self.dv:
+                        if self.dv[node] > dv_copy[node]:
+                            return
+                        
+                # print('-----------------------------------')
+                # print(self.id)
+                # print(dv_copy)
+                # print(self.dv)
+                # print(self.neighbor_costs)
+                # if src not in self.neighbor_costs:
+                self.neighbor_costs[src] = cost
+
+                
+                # print(cost)
+                # print(src)
+
+                msg = {'src': self.id, 'dst': src, 'seq_num': self.seq_num, 'dv': self.dv, 'cost': self.costs}
                 json_message = json.dumps(msg)
                 self.send_to_neighbors(json_message)
 
@@ -323,6 +391,10 @@ class Distance_Vector_Node(Node):
 
 
         print(self.dv[destination][2])
+
+
+
+        print(self.neighbor_costs)
 
 
      
